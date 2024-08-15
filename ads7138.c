@@ -6,6 +6,7 @@
  *
  */
 
+#include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/hwmon.h>
 #include <linux/hwmon-sysfs.h>
@@ -175,6 +176,7 @@ static int ads7138_probe(struct i2c_client *client,
 	int vref_mv = 0;
 	int status;
 	int ret;
+	int status_counter;
 	struct regulator *reg;
 	
 	data = devm_kzalloc(dev, sizeof(struct ads7138_data), GFP_KERNEL);
@@ -220,8 +222,16 @@ static int ads7138_probe(struct i2c_client *client,
 		goto out;
 	}
 
-	/* Get system status */
-	status = ads7138_read_reg(data, ADS7138_REG_SYSTEM_STATUS);
+	for (status_counter = 0; status_counter < 6; ++status_counter) {
+		/* Get system status */
+		status = ads7138_read_reg(data, ADS7138_REG_SYSTEM_STATUS);
+		if (status >= 0) {
+			break;
+		}
+		if (status_counter < 5) {
+			msleep(1);
+		}
+	}
 	if (status < 0)	{
 		dev_err(dev, "Failed to read system status\n");
 		goto out;
@@ -298,3 +308,4 @@ module_i2c_driver(ads7138_driver);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yuri Nesterov <yuri.nesterov@gmail.com>");
 MODULE_DESCRIPTION("Driver for TI ADS7138 A/D converter");
+
