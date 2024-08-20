@@ -166,6 +166,24 @@ static struct attribute *ads7138_attrs[] = {
 
 ATTRIBUTE_GROUPS(ads7138);
 
+static int ads7138_wait_ready(const struct ads7138_data *data)
+{
+    unsigned long timeout = jiffies + msecs_to_jiffies(5);
+    int status;
+
+    do {
+        status = ads7138_read_reg(data, ADS7138_REG_SYSTEM_STATUS);
+        if (status >= 0)
+            break;
+
+        usleep_range(50, 100);
+
+    } while (time_before(jiffies, timeout));
+
+    dev_dbg(dev, "ads7138 status 0x%x\n", status);
+    return status;
+}
+
 static int ads7138_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id)
 {
@@ -215,29 +233,26 @@ static int ads7138_probe(struct i2c_client *client,
 
 	mutex_lock(&data->update_lock);
 
-	/* Software reset */
-	ret = ads7138_write_reg(data, ADS7138_REG_GENERAL_CFG, ADS7138_GENERAL_CFG_RST);
-	if (ret < 0) {
-		dev_err(dev, "Failed to reset\n");
-		goto out;
-	}
+	/* Wait for power-up */
+        status = ads7138_wait_ready(data);
+        if (status < 0) {
+            dev_err(dev, "Failed to read system status after power-up\n");
+            goto out;
+        }
 
-	for (status_counter = 0; status_counter < 6; ++status_counter) {
-		/* Get system status */
-		status = ads7138_read_reg(data, ADS7138_REG_SYSTEM_STATUS);
-		if (status >= 0) {
-			break;
-		}
-		if (status_counter < 5) {
-			msleep(1);
-		}
-	}
-	if (status < 0)	{
-		dev_err(dev, "Failed to read system status\n");
-		goto out;
-	}
+        /* Software reset */
+        ret = ads7138_write_reg(data, ADS7138_REG_GENERAL_CFG, ADS7138_GENERAL_CFG_RST);
+        if (ret < 0) {
+            dev_err(dev, "Failed to reset\n");
+            goto out;
+        }
 
-	dev_dbg(dev, "ads7138 status 0x%x\n", status);	
+        /* Wait for reset to complete */
+        status = ads7138_wait_ready(data);
+        if (status < 0) {
+            dev_err(dev, "Failed to read system status after reset\n");
+            goto out;
+        }
 
 	/* Set data configuration (enable channel id field) */
 	ret = ads7138_write_reg(data, ADS7138_REG_DATA_CFG, ADS7138_DATA_CFG_CH_ID);
@@ -308,4 +323,3 @@ module_i2c_driver(ads7138_driver);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yuri Nesterov <yuri.nesterov@gmail.com>");
 MODULE_DESCRIPTION("Driver for TI ADS7138 A/D converter");
-
