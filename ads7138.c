@@ -166,7 +166,7 @@ static struct attribute *ads7138_attrs[] = {
 
 ATTRIBUTE_GROUPS(ads7138);
 
-static int ads7138_wait_ready(const struct ads7138_data *data)
+static int ads7138_wait_ready(const struct ads7138_data *data, struct device *dev)
 {
     unsigned long timeout = jiffies + msecs_to_jiffies(5);
     int status;
@@ -194,7 +194,6 @@ static int ads7138_probe(struct i2c_client *client,
 	int vref_mv = 0;
 	int status;
 	int ret;
-	int status_counter;
 	struct regulator *reg;
 	
 	data = devm_kzalloc(dev, sizeof(struct ads7138_data), GFP_KERNEL);
@@ -234,7 +233,7 @@ static int ads7138_probe(struct i2c_client *client,
 	mutex_lock(&data->update_lock);
 
 	/* Wait for power-up */
-        status = ads7138_wait_ready(data);
+        status = ads7138_wait_ready(data, dev);
         if (status < 0) {
             dev_err(dev, "Failed to read system status after power-up\n");
             goto out;
@@ -248,7 +247,7 @@ static int ads7138_probe(struct i2c_client *client,
         }
 
         /* Wait for reset to complete */
-        status = ads7138_wait_ready(data);
+        status = ads7138_wait_ready(data, dev);
         if (status < 0) {
             dev_err(dev, "Failed to read system status after reset\n");
             goto out;
